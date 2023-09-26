@@ -21,7 +21,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.tauri.dev",
+      "identifier": "icu.bughub.app.icp_info_getter",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -37,7 +37,7 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "icp-info-getter",
+        "title": "APP备案特征信息读取器",
         "width": 800,
         "height": 600
       }
