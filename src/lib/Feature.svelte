@@ -1,19 +1,51 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/tauri";
+  import {
+    http,
+    os,
+    window as tauriWindow,
+    event,
+    fs,
+    invoke,
+    path,
+    dialog,
+    shell,
+  } from "@tauri-apps/api";
 
-  let name = "";
-  let greetMsg = "";
+  import { onMount, onDestroy } from "svelte";
+  import { toast } from "@zerodevx/svelte-toast";
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-    greetMsg = await invoke("greet", { name });
+  let fileDropListener: event.UnlistenFn;
+
+  async function releaseListener() {
+    fileDropListener();
   }
+
+  async function setupEventListener() {
+    fileDropListener = await tauriWindow.appWindow.onFileDropEvent((event) => {
+      if (event.payload.type == "drop" && event.payload.paths.length > 0) {
+        const path = event.payload.paths[0];
+        if (!path.toLocaleLowerCase().endsWith("ipa")) {
+          toast.push("请拖入ipa包", {
+            theme: {
+              "--toastBarHeight": 0,
+              "--toastColor": "mintcream",
+              "--toastBackground": "rgba(255,0,0,0.9)",
+              "--toastBarBackground": "red",
+            },
+          });
+          return;
+        }
+      }
+    });
+  }
+
+  onMount(async () => {
+    setupEventListener();
+  });
+
+  onDestroy(() => {
+    releaseListener();
+  });
 </script>
 
-<div>
-  <form class="row" on:submit|preventDefault={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
-</div>
+<div />
