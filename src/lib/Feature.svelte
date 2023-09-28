@@ -26,6 +26,7 @@
   let bundleId: string = "";
   let sha1: string = "";
   let modulus: string = "";
+  let cacheZipPath: string = "";
 
   async function releaseListener() {
     fileDropListener();
@@ -62,8 +63,7 @@
               bundleId = s.bundle_id;
               sha1 = s.sha1;
               modulus = s.modulus;
-              console.log(s);
-              console.log("调用完成");
+              cacheZipPath = s.cache_zip_path;
               currentStatus = Status.Result;
             })
             .catch((e) => {
@@ -87,6 +87,30 @@
       ],
     });
     console.log(filePath);
+    invoke("save_file_to_zip", {
+      zipPath: cacheZipPath,
+      filePath: filePath,
+    })
+      .then(() => {
+        toast.push("保存成功", {
+          theme: {
+            "--toastBarHeight": 0,
+            "--toastColor": "mintcream",
+            "--toastBackground": "rgba(0,255,0,0.9)",
+            "--toastBarBackground": "red",
+          },
+        });
+      })
+      .catch((e) => {
+        toast.push("保存失败", {
+          theme: {
+            "--toastBarHeight": 0,
+            "--toastColor": "mintcream",
+            "--toastBackground": "rgba(255,0,0,0.9)",
+            "--toastBarBackground": "red",
+          },
+        });
+      });
   }
 
   onMount(async () => {

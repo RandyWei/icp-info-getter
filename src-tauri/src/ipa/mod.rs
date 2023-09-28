@@ -1,22 +1,28 @@
 use std::{
     fs::{self, File},
-    io::{self, Read},
+    io::{self, Read, Write},
     path::Path,
     process::Command,
 };
 
 use base64::{engine::general_purpose, Engine};
+
 use plist::Value;
 use serde::Serialize;
-use zip::ZipArchive;
+use zip::{write::FileOptions, ZipArchive};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct IcpResult {
-    name: String,
-    bundle_id: String,
-    icon: String,
-    sha1: String,
-    modulus: String,
+    pub name: String,
+    pub bundle_id: String,
+    pub icon: String,
+    pub sha1: String,
+    pub modulus: String,
+    pub cache_zip_path: String,
+}
+
+pub struct SharedData {
+    pub result: IcpResult,
 }
 
 #[tauri::command]
@@ -29,13 +35,36 @@ pub fn parse(ipa_path: &str, cache_path: &str) -> Result<IcpResult, String> {
 
     let openssl_result = exec_openssl(&codesign0_path)?;
 
-    Ok(IcpResult {
-        name: plist_result.0,
+    let zip_file_name = plist_result.0.as_str();
+
+    let result = IcpResult {
+        name: zip_file_name.to_string(),
         bundle_id: plist_result.1,
         icon: plist_result.2,
         sha1: openssl_result.0,
         modulus: openssl_result.1,
-    })
+        cache_zip_path: format!("{}/{}备案材料iOS", &extra_app_path, &zip_file_name),
+    };
+
+    //存储到临时文件
+    let icon_path = plist_result.3;
+    let feature = format!(
+        "APP名称：{}\n\nBundle Id：{}\n\n证书MD5指纹(签名MD5值、SHA-1)：{}\n\nModulus(公钥)：{}",
+        zip_file_name,
+        result.bundle_id.clone(),
+        result.sha1.clone(),
+        result.modulus.clone(),
+    );
+
+    //保存到zip
+    save(
+        &extra_app_path,
+        format!("{}备案材料iOS", zip_file_name).as_str(),
+        icon_path.as_str(),
+        feature.as_str(),
+    )?;
+
+    Ok(result)
 }
 
 /**
@@ -272,7 +301,7 @@ fn exec_openssl(codesign0_path: &str) -> Result<(String, String), String> {
  * - 获取bundle id CFBundleIdentifier
  * - 获取APP图标 CFBundleIcons->CFBundlePrimaryIcon->CFBundleIconFiles
  */
-fn parse_plist(plist_path: &str) -> Result<(String, String, String), String> {
+fn parse_plist(plist_path: &str) -> Result<(String, String, String, String), String> {
     let app_path = Path::new(plist_path);
 
     let plist_path = app_path.join("Info.plist").as_path().display().to_string();
@@ -338,7 +367,7 @@ fn parse_plist(plist_path: &str) -> Result<(String, String, String), String> {
         Err(_) => String::from(""),
     };
 
-    let mut file = File::open(icon_path).unwrap();
+    let mut file = File::open(icon_path.clone()).unwrap();
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).unwrap();
 
@@ -348,6 +377,7 @@ fn parse_plist(plist_path: &str) -> Result<(String, String, String), String> {
         String::from(app_name),
         String::from(bundle_id),
         base64_string,
+        icon_path,
     ))
 }
 
@@ -399,4 +429,52 @@ fn get_normalized_png(filename: &str) -> Result<String, String> {
     } else {
         Err("反解失败".into())
     }
+}
+
+fn save(file_path: &str, file_name: &str, icon_path: &str, feature: &str) -> Result<(), String> {
+    let path = Path::new(file_path).join(file_name);
+    let file = match File::create(path) {
+        Ok(f) => f,
+        Err(_) => return Err("创建文件失败".into()),
+    };
+
+    let mut zip = zip::ZipWriter::new(file);
+
+    match zip.add_directory(file_name, Default::default()) {
+        Ok(_) => {}
+        Err(_) => return Err("增加目录失败".into()),
+    };
+
+    let options = FileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored)
+        .unix_permissions(0o755);
+
+    //写入特征文本
+    match zip.start_file(format!("{}/特征.txt", file_name), options) {
+        Ok(_) => {}
+        Err(_) => return Err("写入失败".into()),
+    };
+    match zip.write_all(feature.as_bytes()) {
+        Ok(_) => {}
+        Err(_) => return Err("写入失败".into()),
+    }
+
+    //写入图标
+    let mut icon_file = match File::open(icon_path) {
+        Ok(f) => f,
+        Err(_) => return Err("读取文件失败".into()),
+    };
+    let mut buffer = Vec::new();
+    icon_file.read_to_end(&mut buffer).unwrap();
+
+    match zip.start_file(format!("{}/icon.png", file_name), options) {
+        Ok(_) => {}
+        Err(_) => return Err("写入失败".into()),
+    };
+    match zip.write_all(&buffer) {
+        Ok(_) => {}
+        Err(_) => return Err("写入失败".into()),
+    }
+
+    Ok(())
 }
