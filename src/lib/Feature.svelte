@@ -1,14 +1,10 @@
 <script lang="ts">
   import {
-    http,
-    os,
     window as tauriWindow,
     event,
-    fs,
     invoke,
     path,
     dialog,
-    shell,
   } from "@tauri-apps/api";
 
   import { onMount, onDestroy } from "svelte";
@@ -79,6 +75,20 @@
     );
   }
 
+  async function saveToZip() {
+    const defaultPath = (await path.downloadDir()) + appName + "备案材料iOS";
+    const filePath = await dialog.save({
+      defaultPath: defaultPath,
+      filters: [
+        {
+          name: "zip",
+          extensions: ["zip"],
+        },
+      ],
+    });
+    console.log(filePath);
+  }
+
   onMount(async () => {
     setupEventListener();
   });
@@ -103,8 +113,10 @@
       <div class="line">证书MD5指纹(签名MD5值、sha-1)：{sha1}</div>
       <div class="line">Modulus(公钥)：{modulus}</div>
     </div>
+    <div id="save-container">
+      <button on:click={saveToZip}>保存为zip</button>
+    </div>
   {/if}
-  <div><button>保存</button></div>
 </div>
 
 <style>
@@ -125,5 +137,13 @@
   }
   .line {
     padding: 0.5rem 0;
+  }
+  #save-container {
+    width: 100%;
+    text-align: center;
+    padding-bottom: 0.5rem;
+  }
+  button {
+    width: 50%;
   }
 </style>
