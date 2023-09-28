@@ -64,6 +64,15 @@ pub fn parse(ipa_path: &str, cache_path: &str) -> Result<IcpResult, String> {
         feature.as_str(),
     )?;
 
+    // let result = IcpResult {
+    //     name: "zip_file_name.to_string()".to_string(),
+    //     bundle_id: "plist_result.1".to_string(),
+    //     icon: "plist_result.2".to_string(),
+    //     sha1: "openssl_result.0".to_string(),
+    //     modulus: "openssl_result.1".to_string(),
+    //     cache_zip_path: "".to_string(),
+    // };
+
     Ok(result)
 }
 
@@ -250,6 +259,8 @@ fn exec_openssl(codesign0_path: &str) -> Result<(String, String), String> {
     let mut cmd = Command::new("openssl");
 
     cmd.arg("x509")
+        .arg("-inform")
+        .arg("DER")
         .arg("-fingerprint")
         .arg("-sha1")
         .arg("-modulus")
@@ -266,30 +277,43 @@ fn exec_openssl(codesign0_path: &str) -> Result<(String, String), String> {
     };
 
     let err_str = String::from_utf8(output.stderr).unwrap();
-    let output_str = String::from_utf8(output.stdout).unwrap();
+
+    let output_str = match String::from_utf8(output.stdout) {
+        Ok(s) => s,
+        Err(_) => return Err("获取脚本回执".into()),
+    };
 
     // println!("执行结果1{}", output_str);
 
-    let lines: Vec<&str> = output_str.lines().take(2).collect();
+    if err_str != "" {
+        return Err("脚本执行错误".into());
+    }
 
-    let sha1_tmp = lines[0].replace(":", "");
+    let lines: Vec<&str> = output_str.lines().take(2).collect();
+    let sha1_tmp = match lines.first() {
+        Some(s) => s,
+        None => "",
+    }
+    .replace(":", "");
 
     let sha1 = match sha1_tmp.split("=").last() {
         Some(s) => s,
         None => "",
     };
-    let modulus = match lines[1].split("=").last() {
+
+    let modulus_tmp = match lines.last() {
+        Some(s) => s,
+        None => "",
+    }
+    .replace(":", "");
+
+    let modulus = match modulus_tmp.split("=").last() {
         Some(s) => s,
         None => "",
     };
 
     //No such file or directory
     // println!("执行结果2{}", err_str);
-
-    // let result = format!(
-    //     "证书MD5指纹(签名MD5值)：{}\nModulus(公钥)：{}",
-    //     sha1, modulus
-    // );
 
     Ok((String::from(sha1), String::from(modulus)))
 }
